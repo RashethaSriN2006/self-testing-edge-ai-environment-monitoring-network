@@ -1,0 +1,31 @@
+# Environment variables and secrets (Strictly Never Commit Secrets)
+.env
+.env.*
+!.env.example
+
+# Python cache & compiled bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+sentrienv/data/*.db
+
+# Log files
+*.log
+startup*.log
+
+# Operating system artifacts
+.DS_Store
+Thumbs.db

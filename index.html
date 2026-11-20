@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ParkSmart AI — Smart City Parking & Traffic Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Leaflet CSS for City Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="dark-theme">
+  <!-- Main Header Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="logo-icon">
+          <i class="fa-solid fa-square-parking"></i>
+          <span class="live-pulse-dot" title="Live Traffic Network Connected"></span>
+        </div>
+        <div class="brand-text">
+          <h1>ParkSmart <span class="accent-text">AI</span></h1>
+          <p class="tagline">Urban Traffic & Smart Slot Management</p>
+        </div>
+      </div>
+
+      <!-- Live City Traffic Status Ticker -->
+      <div class="city-traffic-ticker" id="traffic-ticker" title="City Congestion Index">
+        <div class="ticker-indicator smooth">
+          <span class="pulse-beacon"></span>
+          <i class="fa-solid fa-traffic-light"></i>
+          <span class="ticker-label">City Traffic:</span>
+          <strong id="ticker-status-text">Analyzing Corridors...</strong>
+          <span class="congestion-badge" id="ticker-congestion-pct">--%</span>
+        </div>
+      </div>
+
+      <!-- User Account Actions -->
+      <div class="user-actions" id="user-actions-container">
+        <!-- Rendered dynamically by JS (Guest or Logged in User) -->
+        <button class="btn btn-secondary btn-sm" onclick="openAuthModal('login')">
+          <i class="fa-solid fa-arrow-right-to-bracket"></i> Login
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="openAuthModal('register')">
+          <i class="fa-solid fa-user-plus"></i> Register
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="openDemoDropdown()">
+          <i class="fa-solid fa-bolt"></i> Demo Login
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Secondary Navigation Tabs -->
+  <nav class="nav-tabs-bar">
+    <div class="nav-tabs-container">
+      <button class="tab-btn active" data-tab="traffic-tab" onclick="switchTab('traffic-tab')">
+        <i class="fa-solid fa-map-location-dot"></i> City Traffic & Map
+      </button>
+      <button class="tab-btn" data-tab="hubs-tab" onclick="switchTab('hubs-tab')">
+        <i class="fa-solid fa-warehouse"></i> Parking Hubs & Visual Bays
+      </button>
+      <button class="tab-btn" data-tab="book-tab" onclick="switchTab('book-tab')">
+        <i class="fa-solid fa-calendar-check"></i> Book Parking Slot
+      </button>
+      <button class="tab-btn" data-tab="mybookings-tab" onclick="switchTab('mybookings-tab')">
+        <i class="fa-solid fa-ticket"></i> My Bookings <span class="badge" id="active-bookings-count">0</span>
+      </button>
+      <button class="tab-btn" data-tab="analytics-tab" onclick="switchTab('analytics-tab')">
+        <i class="fa-solid fa-chart-line"></i> Traffic Control & Simulator
+      </button>
+    </div>
+  </nav>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Main Content Areas -->
+  <main class="main-content">
+
+    <!-- TAB 1: CITY TRAFFIC & LIVE MAP -->
+    <section id="traffic-tab" class="tab-content active">
+      <div class="grid-layout-map">
+        <!-- Left: Map Container -->
+        <div class="map-card glass-panel">
+          <div class="card-header">
+            <div>
+              <h3><i class="fa-solid fa-satellite-dish text-primary"></i> Live City Traffic & Parking Hubs</h3>
+              <p class="subtitle">Monitors road congestion in real-time to route you directly to open parking slots</p>
+            </div>
+            <div class="map-legend">
+              <span class="legend-item"><span class="legend-line green"></span> Smooth Flow</span>
+              <span class="legend-item"><span class="legend-line amber"></span> Moderate</span>
+              <span class="legend-item"><span class="legend-line red"></span> Congested</span>
+              <span class="legend-item"><i class="fa-solid fa-square-parking text-primary"></i> Parking Hub</span>
+            </div>
+          </div>
+          <div id="city-map" class="map-display"></div>
+          <div class="map-footer-bar">
+            <span><i class="fa-solid fa-circle-info"></i> Click any parking marker to view live slot vacancy and book directly.</span>
+            <button class="btn btn-sm btn-outline" onclick="fetchTrafficAndRenderMap()">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh Map
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: AI Traffic-Free Parking Recommender & Traffic Feed -->
+        <div class="traffic-sidebar">
+          <!-- Traffic-Free Parking Finder Widget -->
+          <div class="card glass-panel recommendation-panel">
+            <div class="card-header">
+              <h4><i class="fa-solid fa-compass text-emerald"></i> Traffic-Free Parking AI</h4>
+              <span class="pill-tag pill-success">Congestion Avoidance</span>
+            </div>
+            <p class="small-text">Our algorithm analyzes corridor choke points and assigns you the fastest parking spot:</p>
+
+            <div class="quick-filter-row">
+              <label for="ai-vehicle-select">Vehicle:</label>
+              <select id="ai-vehicle-select" onchange="loadSmartRecommendations()">
+                <option value="Car">🚗 Car</option>
+                <option value="Bike">🏍️ Bike / 2-Wheeler</option>
+                <option value="EV">⚡ Electric Vehicle</option>
+                <option value="SUV">🚙 SUV / Van</option>
+              </select>
+            </div>
+
+            <div id="recommendations-list" class="recs-container">
+              <!-- Rendered by JS -->
+              <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Calculating optimal routes...</div>
+            </div>
+          </div>
+
+          <!-- Live Corridors Status Feed -->
+          <div class="card glass-panel">
+            <div class="card-header">
+              <h4><i class="fa-solid fa-road text-amber"></i> City Corridors Live Feed</h4>
+              <span class="last-sync" id="corridor-sync-time">Live</span>
+            </div>
+            <div id="corridors-list" class="corridor-cards-list">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: PARKING HUBS & VISUAL 2D BAY MONITOR -->
+    <section id="hubs-tab" class="tab-content">
+      <div class="hubs-control-bar glass-panel">
+        <div class="hub-select-group">
+          <label><i class="fa-solid fa-building"></i> Select Parking Hub:</label>
+          <select id="hub-selector" onchange="onHubChange()">
+            <!-- Populated by JS -->
+          </select>
+        </div>
+
+        <div class="filter-controls">
+          <div class="filter-group">
+            <label>Vehicle Type:</label>
+            <div class="vehicle-toggle-pills" id="visual-vehicle-filter">
+              <button class="filter-pill active" data-vtype="All" onclick="filterVisualSlots('vehicle', 'All')">All</button>
+              <button class="filter-pill" data-vtype="Car" onclick="filterVisualSlots('vehicle', 'Car')">🚗 Car</button>
+              <button class="filter-pill" data-vtype="Bike" onclick="filterVisualSlots('vehicle', 'Bike')">🏍️ Bike</button>
+              <button class="filter-pill" data-vtype="EV" onclick="filterVisualSlots('vehicle', 'EV')">⚡ EV</button>
+              <button class="filter-pill" data-vtype="SUV" onclick="filterVisualSlots('vehicle', 'SUV')">🚙 SUV</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label>Floor:</label>
+            <div class="vehicle-toggle-pills" id="visual-floor-filter">
+              <button class="filter-pill active" data-floor="All" onclick="filterVisualSlots('floor', 'All')">All Floors</button>
+              <button class="filter-pill" data-floor="Ground" onclick="filterVisualSlots('floor', 'Ground')">Ground</button>
+              <button class="filter-pill" data-floor="Floor 1" onclick="filterVisualSlots('floor', 'Floor 1')">Floor 1</button>
+              <button class="filter-pill" data-floor="Basement" onclick="filterVisualSlots('floor', 'Basement')">Basement</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="quick-book-cta">
+          <button class="btn btn-primary" onclick="proceedToBookingFromHub()">
+            <i class="fa-solid fa-ticket"></i> Book at this Hub
+          </button>
+        </div>
+      </div>
+
+      <!-- Hub Overview Metrics Banner -->
+      <div id="current-hub-banner" class="hub-metrics-banner glass-panel">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Interactive 2D Visual Slot Grid Layout -->
+      <div class="glass-panel lot-layout-container">
+        <div class="lot-header">
+          <div>
+            <h3><i class="fa-solid fa-border-all text-primary"></i> Real-Time Parking Lot Bay Layout</h3>
+            <p class="subtitle">Click on any <span class="text-emerald font-bold">Available (Green)</span> bay to book it immediately!</p>
+          </div>
+          <div class="slot-legend">
+            <span class="legend-badge status-avail"><span class="dot green"></span> Available</span>
+            <span class="legend-badge status-occ"><span class="dot red"></span> Occupied</span>
+            <span class="legend-badge status-res"><span class="dot purple"></span> Reserved</span>
+            <span class="legend-badge status-ev"><span class="dot cyan"></span> EV Charging</span>
+          </div>
+        </div>
+
+        <div id="visual-slots-grid" class="visual-slots-grid">
+          <!-- Dynamically populated bay cards by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: EASY SLOT BOOKING WIZARD -->
+    <section id="book-tab" class="tab-content">
+      <div class="booking-wizard-container">
+        <div class="card glass-panel booking-form-card">
+          <div class="card-header">
+            <div>
+              <h2><i class="fa-solid fa-circle-check text-primary"></i> Reserve Your Parking Slot</h2>
+              <p class="subtitle">Guaranteed slot reservation to avoid circling and reduce city traffic congestion</p>
+            </div>
+            <div class="step-badge">Instant Pass</div>
+          </div>
+
+          <form id="booking-form" onsubmit="handleBookingSubmit(event)">
+            <div class="form-grid">
+              <!-- Location Selection -->
+              <div class="form-group full-width">
+                <label for="book-location-select"><i class="fa-solid fa-location-dot"></i> Parking Facility / Hub:</label>
+                <select id="book-location-select" required onchange="onBookingLocationOrVehicleChange()">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+
+              <!-- Vehicle Category Selector -->
+              <div class="form-group full-width">
+                <label><i class="fa-solid fa-car-side"></i> Vehicle Type to Park:</label>
+                <div class="vehicle-selector-grid">
+                  <label class="vehicle-option-card">
+                    <input type="radio" name="vehicle_type" value="Car" checked onchange="onBookingLocationOrVehicleChange()">
+                    <div class="card-box">
+                      <div class="v-icon">🚗</div>
+                      <div class="v-title">Car</div>
+                      <div class="v-desc">Sedan / Hatchback</div>
+                      <div class="v-price" id="price-rate-car">$40/hr</div>
+                    </div>
+                  </label>
+
+                  <label class="vehicle-option-card">
+                    <input type="radio" name="vehicle_type" value="Bike" onchange="onBookingLocationOrVehicleChange()">
+                    <div class="card-box">
+                      <div class="v-icon">🏍️</div>
+                      <div class="v-title">Bike</div>
+                      <div class="v-desc">Motorcycle / Scooter</div>
+                      <div class="v-price" id="price-rate-bike">$15/hr</div>
+                    </div>
+                  </label>
+
+                  <label class="vehicle-option-card">
+                    <input type="radio" name="vehicle_type" value="EV" onchange="onBookingLocationOrVehicleChange()">
+                    <div class="card-box">
+                      <div class="v-icon">⚡</div>
+                      <div class="v-title">EV Plug-in</div>
+                      <div class="v-desc">Dedicated Charger</div>
+                      <div class="v-price" id="price-rate-ev">$50/hr</div>
+                    </div>
+                  </label>
+
+                  <label class="vehicle-option-card">
+                    <input type="radio" name="vehicle_type" value="SUV" onchange="onBookingLocationOrVehicleChange()">
+                    <div class="card-box">
+                      <div class="v-icon">🚙</div>
+                      <div class="v-title">SUV / Van</div>
+                      <div class="v-desc">Large Vehicle Bay</div>
+                      <div class="v-price" id="price-rate-suv">$60/hr</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Slot Allocation Preference -->
+              <div class="form-group full-width">
+                <label for="book-slot-select"><i class="fa-solid fa-square-parking"></i> Preferred Slot Allocation:</label>
+                <select id="book-slot-select">
+                  <option value="">⚡ Auto-Assign Nearest Free Slot (Recommended)</option>
+                  <!-- Populated dynamically with available slots -->
+                </select>
+                <span class="help-text">Select auto-assign or pick a specific bay number from the list.</span>
+              </div>
+
+              <!-- Vehicle Registration / Plate Number -->
+              <div class="form-group">
+                <label for="book-plate"><i class="fa-solid fa-id-card"></i> Vehicle License Plate:</label>
+                <input type="text" id="book-plate" placeholder="e.g. CA-48-MK-9201" required uppercase>
+              </div>
+
+              <!-- Duration Selector -->
+              <div class="form-group">
+                <label for="book-duration"><i class="fa-solid fa-clock"></i> Parking Duration:</label>
+                <select id="book-duration" onchange="updateBookingEstimate()">
+                  <option value="1">1 Hour</option>
+                  <option value="2" selected>2 Hours (Standard)</option>
+                  <option value="3">3 Hours</option>
+                  <option value="4">4 Hours (Half Day)</option>
+                  <option value="8">8 Hours (Workday)</option>
+                  <option value="24">24 Hours (Full Day)</option>
+                </select>
+              </div>
+
+              <!-- Start Time -->
+              <div class="form-group full-width">
+                <label for="book-start-type"><i class="fa-solid fa-play"></i> Arrival Time:</label>
+                <div class="arrival-options">
+                  <label class="radio-label">
+                    <input type="radio" name="arrival_type" value="now" checked onchange="toggleArrivalCustom(false)">
+                    Arriving Now (Instant Activation)
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="arrival_type" value="custom" onchange="toggleArrivalCustom(true)">
+                    Schedule Later
+                  </label>
+                  <input type="datetime-local" id="book-start-custom" class="hidden-input">
+                </div>
+              </div>
+            </div>
+
+            <!-- Price Breakdown Summary -->
+            <div class="booking-summary-box">
+              <div class="summary-row">
+                <span>Selected Facility:</span>
+                <strong id="summary-hub-name">--</strong>
+              </div>
+              <div class="summary-row">
+                <span>Vehicle & Hourly Rate:</span>
+                <span id="summary-rate-text">--</span>
+              </div>
+              <div class="summary-row">
+                <span>Estimated Congestion Delay:</span>
+                <span class="text-emerald font-bold" id="summary-delay-text">0 mins (Clear Route)</span>
+              </div>
+              <div class="summary-row total-row">
+                <span>Total Amount to Pay at Exit / Pass:</span>
+                <span class="total-amount" id="summary-total-amount">$0.00</span>
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-submit-booking">
+              <i class="fa-solid fa-shield-halved"></i> Confirm & Generate Digital Parking Pass
+            </button>
+          </form>
+        </div>
+
+        <!-- Right Side: Booking Perks & Route Guidance -->
+        <div class="booking-perks-sidebar">
+          <div class="card glass-panel perk-card">
+            <h4><i class="fa-solid fa-route text-emerald"></i> Traffic-Free Guarantee</h4>
+            <p>Reserving in advance secures your entry barricade code. You avoid idling and searching for parking, cutting emissions and road congestion.</p>
+          </div>
+
+          <div class="card glass-panel perk-card">
+            <h4><i class="fa-solid fa-qrcode text-primary"></i> Contactless QR Access</h4>
+            <p>Every booking generates a digital entry QR code. Simply scan at the automated entry gate for hands-free boom barrier access.</p>
+          </div>
+
+          <div class="card glass-panel perk-card">
+            <h4><i class="fa-solid fa-clock-rotate-left text-amber"></i> Flexible 1-Click Extension</h4>
+            <p>Running late in a meeting? Extend your parking session from your phone directly without having to return to your vehicle.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: MY BOOKINGS & PASSES -->
+    <section id="mybookings-tab" class="tab-content">
+      <div class="bookings-header-bar glass-panel">
+        <div>
+          <h2><i class="fa-solid fa-ticket text-primary"></i> My Booked Parking Slots & Digital Passes</h2>
+          <p class="subtitle">View your active reservations, slot bay numbers, live countdown, and navigation passes</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-outline btn-sm" onclick="fetchMyBookings()">
+            <i class="fa-solid fa-arrows-rotate"></i> Refresh Passes
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="switchTab('book-tab')">
+            <i class="fa-solid fa-plus"></i> New Slot Booking
+          </button>
+        </div>
+      </div>
+
+      <!-- Bookings Cards Container -->
+      <div id="my-bookings-container" class="bookings-grid">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- TAB 5: CITY TRAFFIC ANALYTICS & SIMULATOR -->
+    <section id="analytics-tab" class="tab-content">
+      <div class="analytics-dashboard">
+        <!-- Operator Simulation Controls -->
+        <div class="card glass-panel simulator-card">
+          <div class="card-header">
+            <div>
+              <h3><i class="fa-solid fa-sliders text-primary"></i> Smart City Live Sensor & Traffic Simulator</h3>
+              <p class="subtitle">Simulate real-time traffic pulse, vehicle arrivals, and parking sensor updates</p>
+            </div>
+            <span class="live-pill"><i class="fa-solid fa-wifi"></i> IoT Simulation Engine</span>
+          </div>
+
+          <div class="simulator-actions">
+            <button class="btn btn-primary" onclick="triggerSimulationPulse()">
+              <i class="fa-solid fa-bolt"></i> Pulse Traffic & Slot Sensor (1 Step)
+            </button>
+            <button class="btn btn-outline" id="auto-sim-btn" onclick="toggleAutoSimulation()">
+              <i class="fa-solid fa-play"></i> Enable Auto-Pulse (Every 5s)
+            </button>
+            <button class="btn btn-secondary" onclick="resetDemoData()">
+              <i class="fa-solid fa-database"></i> Refresh City Dataset
+            </button>
+          </div>
+        </div>
+
+        <!-- City-wide Key Performance Indicators -->
+        <div class="kpi-grid">
+          <div class="kpi-card glass-panel">
+            <div class="kpi-icon emerald"><i class="fa-solid fa-car"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-title">Total Active Parking Bays</span>
+              <h3 class="kpi-val" id="kpi-total-slots">140</h3>
+              <span class="kpi-sub">Across 5 City Hubs</span>
+            </div>
+          </div>
+
+          <div class="kpi-card glass-panel">
+            <div class="kpi-icon cyan"><i class="fa-solid fa-charging-station"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-title">EV Charging Stations</span>
+              <h3 class="kpi-val" id="kpi-ev-slots">28 Bays</h3>
+              <span class="kpi-sub">Level 3 Fast Chargers</span>
+            </div>
+          </div>
+
+          <div class="kpi-card glass-panel">
+            <div class="kpi-icon amber"><i class="fa-solid fa-clock"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-title">Traffic Search Delay Saved</span>
+              <h3 class="kpi-val">24.5 Mins</h3>
+              <span class="kpi-sub">Per Commuter / Day</span>
+            </div>
+          </div>
+
+          <div class="kpi-card glass-panel">
+            <div class="kpi-icon purple"><i class="fa-solid fa-leaf"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-title">CO2 Emission Cut</span>
+              <h3 class="kpi-val">-38.2%</h3>
+              <span class="kpi-sub">Through Zero-Circling</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- City Traffic Corridor Breakdown Table -->
+        <div class="card glass-panel">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-table-list text-primary"></i> Urban Corridor Congestion Status</h3>
+            <span class="small-text">Updated dynamically via connected IoT traffic camera telemetry</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Corridor Name</th>
+                  <th>Origin & Destination</th>
+                  <th>Congestion Level</th>
+                  <th>Avg Speed</th>
+                  <th>Delay</th>
+                  <th>Traffic Advisory</th>
+                </tr>
+              </thead>
+              <tbody id="corridors-table-body">
+                <!-- Rendered by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- AUTHENTICATION MODAL (LOGIN & REGISTER) -->
+  <div id="auth-modal" class="modal-overlay">
+    <div class="modal-card glass-panel">
+      <button class="modal-close" onclick="closeAuthModal()"><i class="fa-solid fa-xmark"></i></button>
+      
+      <div class="auth-modal-header">
+        <div class="auth-tabs">
+          <button id="auth-tab-login" class="auth-tab-btn active" onclick="switchAuthTab('login')">
+            <i class="fa-solid fa-arrow-right-to-bracket"></i> Login
+          </button>
+          <button id="auth-tab-register" class="auth-tab-btn" onclick="switchAuthTab('register')">
+            <i class="fa-solid fa-user-plus"></i> Register New User
+          </button>
+        </div>
+      </div>
+
+      <!-- Login Form View -->
+      <div id="login-form-view" class="auth-form-view">
+        <h3>Welcome Back</h3>
+        <p class="subtitle">Enter your credentials to manage parking reservations</p>
+
+        <form id="login-form" onsubmit="handleLoginSubmit(event)">
+          <div class="form-group">
+            <label for="login-username"><i class="fa-solid fa-user"></i> Username or Email:</label>
+            <input type="text" id="login-username" required placeholder="e.g. driver1 or user@email.com">
+          </div>
+
+          <div class="form-group">
+            <label for="login-password"><i class="fa-solid fa-lock"></i> Password:</label>
+            <input type="password" id="login-password" required placeholder="Enter password">
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block btn-lg">
+            <i class="fa-solid fa-right-to-bracket"></i> Sign In to Portal
+          </button>
+        </form>
+
+        <div class="demo-quick-picks">
+          <p class="small-text">Or Instant 1-Click Demo Login:</p>
+          <div class="quick-demo-buttons">
+            <button class="btn btn-sm btn-outline" onclick="quickDemoLogin('driver1')">🚗 Car Driver</button>
+            <button class="btn btn-sm btn-outline" onclick="quickDemoLogin('biker_sarah')">🏍️ Bike Rider</button>
+            <button class="btn btn-sm btn-outline" onclick="quickDemoLogin('ev_james')">⚡ EV Driver</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Register Form View -->
+      <div id="register-form-view" class="auth-form-view hidden">
+        <h3>Create New Account</h3>
+        <p class="subtitle">Register with your own username & password to access parking slots</p>
+
+        <form id="register-form" onsubmit="handleRegisterSubmit(event)">
+          <div class="form-group">
+            <label for="reg-username"><i class="fa-solid fa-user-tag"></i> Username (Required):</label>
+            <input type="text" id="reg-username" required placeholder="Choose unique username">
+          </div>
+
+          <div class="form-group">
+            <label for="reg-password"><i class="fa-solid fa-key"></i> Password (Required):</label>
+            <input type="password" id="reg-password" required placeholder="Create secure password">
+          </div>
+
+          <div class="form-group">
+            <label for="reg-fullname"><i class="fa-solid fa-id-badge"></i> Full Name:</label>
+            <input type="text" id="reg-fullname" placeholder="e.g. Marcus Vance">
+          </div>
+
+          <div class="form-group">
+            <label for="reg-email"><i class="fa-solid fa-envelope"></i> Email Address:</label>
+            <input type="email" id="reg-email" placeholder="e.g. marcus@urban.com">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group half">
+              <label for="reg-plate"><i class="fa-solid fa-car"></i> Vehicle Plate:</label>
+              <input type="text" id="reg-plate" placeholder="e.g. NY-90-TR-1100">
+            </div>
+            <div class="form-group half">
+              <label for="reg-vtype"><i class="fa-solid fa-motorcycle"></i> Vehicle Type:</label>
+              <select id="reg-vtype">
+                <option value="Car">🚗 Car</option>
+                <option value="Bike">🏍️ Bike</option>
+                <option value="EV">⚡ Electric Vehicle</option>
+                <option value="SUV">🚙 SUV / Van</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block btn-lg">
+            <i class="fa-solid fa-user-check"></i> Register & Instant Login
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- DIGITAL PARKING PASS / QR MODAL -->
+  <div id="pass-modal" class="modal-overlay">
+    <div class="modal-card glass-panel pass-modal-card">
+      <button class="modal-close" onclick="closePassModal()"><i class="fa-solid fa-xmark"></i></button>
+
+      <div class="ticket-container" id="ticket-pass-content">
+        <!-- Rendered dynamically by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- SLOT DETAILS & DIRECT BOOKING POPUP MODAL -->
+  <div id="slot-modal" class="modal-overlay">
+    <div class="modal-card glass-panel slot-modal-card">
+      <button class="modal-close" onclick="closeSlotModal()"><i class="fa-solid fa-xmark"></i></button>
+      <div id="slot-modal-content">
+        <!-- Rendered dynamically by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Application JS -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
